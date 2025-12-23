@@ -27,7 +27,6 @@ def stun(port, host="stun.ekiga.net", sock = None):
                 sock.close()
                 return socket.inet_ntoa(ans[28:32]), int.from_bytes(ans[26:28], byteorder="big")
             except:
-                #pass
                 time.sleep(0.05)
 
 
@@ -103,7 +102,7 @@ class TCPClient(UDPHolePuncher):
         self.__sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.__sock.bind(('0.0.0.0', self.__port))
         self.__sock.listen(1)
-        #self.__th = threading.Thread(target=self.__listener, daemon=True)
+
         self.__send = threading.Thread(target=self.__tcp_sender, daemon=True)
 
     def run(self):
@@ -114,26 +113,31 @@ class TCPClient(UDPHolePuncher):
             self.tcp_state = 1
             self.__current_client.setblocking(False)
             while self.tcp_state:
-                data = b''
                 try:
                     data = self.__current_client.recv(4096)
+                    if data:
+                        self.send_data(b'\x02' + data)
+                    else:
+                        self.tcp_state = 0
+                        self.send_data(b'\x01')
+                        self.__current_client.close()
                 except BlockingIOError:
                     pass
-                if data:
-                    self.send_data(b'\x02'+data)
+
 
     def __tcp_sender(self):
-        data = b''
-        try:
-            data = self.queue.pop(0)
-        except IndexError:
-            pass
-        if data:
-            if data[0] == 1:
-                self.tcp_state = 0
-            elif data[0] == 2:
-                if self.tcp_state:
-                    self.__sock.sendall(data[1:])
+        while True:
+            data = b''
+            try:
+                data = self.queue.pop(0)
+            except IndexError:
+                pass
+            if data:
+                if data[0] == 1 and self.tcp_state:
+                    self.tcp_state = 0
+                    self.__current_client.close()
+                elif data[0] == 2 and self.tcp_state:
+                    self.__current_client.sendall(data[1:])
 
 
 class TCPServer(UDPHolePuncher):
@@ -143,8 +147,6 @@ class TCPServer(UDPHolePuncher):
         self.tcp_state = 0  # not connected
 
         self.__port = port
-
-        # self.__th = threading.Thread(target=self.__listener, daemon=True)
         self.__send = threading.Thread(target=self.__udp_sender, daemon=True)
 
     def run(self):
@@ -187,4 +189,4 @@ class TCPServer(UDPHolePuncher):
                     self.__sock.close()
                 except OSError as e:
                     pass
-                    # print(e)
+
