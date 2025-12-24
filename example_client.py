@@ -1,4 +1,4 @@
-from TCPoverUDP import TCPClient, UPDHolePuncher, stun, addr2int, int2adddr
+from TCPoverUDP import TCPClient
 import socket
 import time
 import random
